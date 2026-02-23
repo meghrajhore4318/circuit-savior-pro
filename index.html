@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circuit Savior - Scenario Mode</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1E272E; color: white; text-align: center; margin: 0; padding: 20px; }
+        .header { display: flex; justify-content: space-between; max-width: 650px; margin: 0 auto; font-size: 24px; font-weight: bold; }
+        .score-text { color: #2ECC71; }
+        .timer-text { color: #E74C3C; }
+        
+        .scenario-box { background: #2C3E50; border: 2px dashed #F39C12; border-radius: 10px; padding: 15px; max-width: 500px; margin: 20px auto; font-size: 18px; }
+        .scenario-box span.highlight { color: #F1C40F; font-weight: bold; font-size: 22px; }
+        .scenario-box span.danger { color: #E74C3C; font-weight: bold; font-size: 22px; }
+
+        /* 4-Band Resistor Design */
+        .resistor { background-color: #E2CB9C; width: 350px; height: 90px; margin: 20px auto; border-radius: 40px; display: flex; justify-content: space-evenly; align-items: center; border: 3px solid #7F8C8D; position: relative; }
+        /* Adding wire ends to resistor */
+        .resistor::before, .resistor::after { content: ''; position: absolute; width: 50px; height: 10px; background: #7F8C8D; top: 40px; }
+        .resistor::before { left: -50px; }
+        .resistor::after { right: -50px; }
+
+        .band { width: 35px; height: 90px; background-color: rgba(255,255,255,0.2); color: black; line-height: 90px; font-weight: bold; text-align: center; border: 1px dashed #333; }
+        
+        .palette { max-width: 550px; margin: 20px auto; display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+        .color-btn { padding: 12px 0; border: none; cursor: pointer; font-weight: bold; border-radius: 5px; font-size: 13px; transition: transform 0.1s; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        .color-btn:active { transform: scale(0.95); }
+        .color-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .controls { margin: 20px; }
+        button.action-btn { padding: 10px 20px; font-size: 18px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; margin: 0 10px; }
+        .start-btn { background-color: #3498DB; color: white; }
+        .clear-btn { background-color: #E67E22; color: white; }
+        
+        #status { font-size: 20px; height: 30px; margin-bottom: 10px; color: #3498DB; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="score-text">Score: <span id="score">0</span></div>
+        <div class="timer-text">Time: <span id="timer">45</span>s</div>
+    </div>
+
+    <h1>⚡ Circuit Savior: Boss Mode ⚡</h1>
+    
+    <div class="scenario-box">
+        <p>Wire Resistance: <span class="danger" id="existingRes">---</span> Ω</p>
+        <p>Machine Needs: <span class="highlight" id="targetTotal">---</span> Ω</p>
+        <p>Tolerance Needed: <span class="highlight" id="targetTol">---</span></p>
+        <p style="font-size: 14px; color: #BDC3C7;">(Hint: Calculate missing resistance and add 4 colors!)</p>
+    </div>
+    
+    <div id="status">Press 'Start Game' to begin!</div>
+
+    <div class="resistor">
+        <div class="band" id="band1">1</div>
+        <div class="band" id="band2">2</div>
+        <div class="band" id="band3">X</div>
+        <div class="band" id="band4">±%</div>
+    </div>
+
+    <div class="palette" id="palette"></div>
+
+    <div class="controls">
+        <button class="action-btn start-btn" id="startBtn" onclick="startGame()">Start Game</button>
+        <button class="action-btn clear-btn" id="clearBtn" onclick="clearSelection()" disabled>Clear Colors</button>
+    </div>
+
+    <script>
+        // Updated colors with Gold and Silver
+        const COLORS = {
+            "Black": {val: 0, mult: 1, bg: "#000000", fg: "white"},
+            "Brown": {val: 1, mult: 10, bg: "#8B4513", fg: "white", tol: 1},
+            "Red": {val: 2, mult: 100, bg: "#FF0000", fg: "white", tol: 2},
+            "Orange": {val: 3, mult: 1000, bg: "#FFA500", fg: "white"},
+            "Yellow": {val: 4, mult: 10000, bg: "#FFFF00", fg: "black"},
+            "Green": {val: 5, mult: 100000, bg: "#008000", fg: "white", tol: 0.5},
+            "Blue": {val: 6, mult: 1000000, bg: "#0000FF", fg: "white", tol: 0.25},
+            "Violet": {val: 7, mult: 10000000, bg: "#EE82EE", fg: "black", tol: 0.1},
+            "Gray": {val: 8, mult: 100000000, bg: "#808080", fg: "white"},
+            "White": {val: 9, mult: 1000000000, bg: "#FFFFFF", fg: "black"},
+            "Gold": {mult: 0.1, bg: "#D4AF37", fg: "black", tol: 5},
+            "Silver": {mult: 0.01, bg: "#C0C0C0", fg: "black", tol: 10}
+        };
+
+        let targetRequiredRes = 0;
+        let targetRequiredTol = 0;
+        let selectedColors = [];
+        let score = 0;
+        let timeLeft = 45; // Increased time for calculations
+        let timerInterval;
+        let isPlaying = false;
+
+        // Initialize Palette
+        const palette = document.getElementById('palette');
+        for (let color in COLORS) {
+            let btn = document.createElement('button');
+            btn.className = 'color-btn';
+            btn.innerText = color;
+            btn.style.backgroundColor = COLORS[color].bg;
+            btn.style.color = COLORS[color].fg;
+            btn.disabled = true;
+            btn.onclick = () => addColor(color);
+            palette.appendChild(btn);
+        }
+
+        function startGame() {
+            score = 0;
+            document.getElementById('score').innerText = score;
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('clearBtn').disabled = false;
+            
+            let btns = document.querySelectorAll('.color-btn');
+            btns.forEach(btn => btn.disabled = false);
+            
+            nextRound();
+        }
+
+        function nextRound() {
+            isPlaying = true;
+            timeLeft = 45; // 45 seconds to do math and pick colors
+            document.getElementById('timer').innerText = timeLeft;
+            document.body.style.backgroundColor = "#1E272E"; 
+            document.getElementById('status').innerText = "Select 4 Colors (D1, D2, Mult, Tol)";
+            document.getElementById('status').style.color = "#3498DB";
+            
+            // Logic for Scenario Math
+            let d1 = Math.floor(Math.random() * 9) + 1; // 1-9
+            let d2 = Math.floor(Math.random() * 10);    // 0-9
+            let multipliers = [1, 10, 100, 1000, 10000];
+            let mult = multipliers[Math.floor(Math.random() * multipliers.length)];
+            
+            targetRequiredRes = (d1 * 10 + d2) * mult;
+            
+            let existingRes = Math.floor(Math.random() * 20 + 1) * 50; // Random resistance like 50, 100, 450
+            let targetTotal = existingRes + targetRequiredRes;
+            
+            // Tolerance (Only 5% or 10% for simplicity)
+            let tolerances = [5, 10]; 
+            targetRequiredTol = tolerances[Math.floor(Math.random() * tolerances.length)];
+
+            document.getElementById('existingRes').innerText = existingRes;
+            document.getElementById('targetTotal').innerText = targetTotal;
+            document.getElementById('targetTol').innerText = `±${targetRequiredTol}%`;
+            
+            clearSelection();
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            if (!isPlaying) return;
+            timeLeft--;
+            document.getElementById('timer').innerText = timeLeft;
+            
+            if (timeLeft <= 0) {
+                gameOver("Time's Up! Component Burnt! 🔥");
+            }
+        }
+
+        function addColor(color) {
+            if (!isPlaying) return;
+            if (selectedColors.length < 4) {
+                selectedColors.push(color);
+                updateResistorDisplay();
+                
+                if (selectedColors.length === 4) {
+                    checkAnswer();
+                }
+            }
+        }
+
+        function updateResistorDisplay() {
+            for (let i = 0; i < 4; i++) {
+                let band = document.getElementById(`band${i+1}`);
+                if (i < selectedColors.length) {
+                    let color = selectedColors[i];
+                    band.innerText = color.charAt(0);
+                    band.style.backgroundColor = COLORS[color].bg;
+                    band.style.color = COLORS[color].fg;
+                    band.style.border = "none";
+                } else {
+                    let placeholders = ["1", "2", "X", "±%"];
+                    band.innerText = placeholders[i];
+                    band.style.backgroundColor = "rgba(255,255,255,0.2)";
+                    band.style.color = "black";
+                    band.style.border = "1px dashed #333";
+                }
+            }
+        }
+
+        function clearSelection() {
+            selectedColors = [];
+            updateResistorDisplay();
+        }
+
+        function checkAnswer() {
+            isPlaying = false;
+            clearInterval(timerInterval);
+
+            let c1 = selectedColors[0], c2 = selectedColors[1], c3 = selectedColors[2], c4 = selectedColors[3];
+            
+            // Validation: First two bands cannot be Gold or Silver (they have no 'val')
+            if (COLORS[c1].val === undefined || COLORS[c2].val === undefined) {
+                gameOver("Wrong! Band 1 & 2 cannot be Gold/Silver 💥");
+                return;
+            }
+
+            let val1 = COLORS[c1].val, val2 = COLORS[c2].val, mult = COLORS[c3].mult;
+            let userTol = COLORS[c4].tol;
+            let userResistance = (val1 * 10 + val2) * mult;
+
+            if (userResistance === targetRequiredRes && userTol === targetRequiredTol) {
+                score += 20; // 20 points for hard math!
+                document.getElementById('score').innerText = score;
+                document.getElementById('status').innerText = "Brilliant! Circuit Stabilized! ⚡";
+                document.getElementById('status').style.color = "white";
+                document.body.style.backgroundColor = "#27AE60"; // Green flash
+                setTimeout(nextRound, 2000);
+            } else {
+                let msg = `Wrong! You made ${userResistance}Ω ±${userTol || "?"}%. Needed ${targetRequiredRes}Ω ±${targetRequiredTol}% 💥`;
+                gameOver(msg);
+            }
+        }
+
+        function gameOver(message) {
+            isPlaying = false;
+            clearInterval(timerInterval);
+            document.getElementById('status').innerText = message;
+            document.getElementById('status').style.color = "white";
+            document.body.style.backgroundColor = "#C0392B"; // Red flash
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').innerText = "Play Again";
+            document.getElementById('clearBtn').disabled = true;
+            
+            let btns = document.querySelectorAll('.color-btn');
+            btns.forEach(btn => btn.disabled = true);
+        }
+    </script>
+</body>
+</html>
