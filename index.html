@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circuit Savior - Scenario Mode</title>
+    <title>Circuit Savior - Global Leaderboard</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1E272E; color: white; text-align: center; margin: 0; padding: 20px; }
         .header { display: flex; justify-content: space-between; max-width: 650px; margin: 0 auto; font-size: 24px; font-weight: bold; }
@@ -14,9 +17,7 @@
         .scenario-box span.highlight { color: #F1C40F; font-weight: bold; font-size: 22px; }
         .scenario-box span.danger { color: #E74C3C; font-weight: bold; font-size: 22px; }
 
-        /* 4-Band Resistor Design */
         .resistor { background-color: #E2CB9C; width: 350px; height: 90px; margin: 20px auto; border-radius: 40px; display: flex; justify-content: space-evenly; align-items: center; border: 3px solid #7F8C8D; position: relative; }
-        /* Adding wire ends to resistor */
         .resistor::before, .resistor::after { content: ''; position: absolute; width: 50px; height: 10px; background: #7F8C8D; top: 40px; }
         .resistor::before { left: -50px; }
         .resistor::after { right: -50px; }
@@ -34,6 +35,13 @@
         .clear-btn { background-color: #E67E22; color: white; }
         
         #status { font-size: 20px; height: 30px; margin-bottom: 10px; color: #3498DB; font-weight: bold; }
+
+        /* Leaderboard Styles */
+        .leaderboard { max-width: 450px; margin: 30px auto; background: #34495E; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .leaderboard h3 { margin-top: 0; color: #F1C40F; }
+        .leaderboard table { width: 100%; border-collapse: collapse; }
+        .leaderboard th, .leaderboard td { padding: 10px; border-bottom: 1px solid #7F8C8D; text-align: center; }
+        .rank-1 { color: #F1C40F; font-weight: bold; font-size: 1.2em; }
     </style>
 </head>
 <body>
@@ -49,7 +57,6 @@
         <p>Wire Resistance: <span class="danger" id="existingRes">---</span> Ω</p>
         <p>Machine Needs: <span class="highlight" id="targetTotal">---</span> Ω</p>
         <p>Tolerance Needed: <span class="highlight" id="targetTol">---</span></p>
-        <p style="font-size: 14px; color: #BDC3C7;">(Hint: Calculate missing resistance and add 4 colors!)</p>
     </div>
     
     <div id="status">Press 'Start Game' to begin!</div>
@@ -65,11 +72,48 @@
 
     <div class="controls">
         <button class="action-btn start-btn" id="startBtn" onclick="startGame()">Start Game</button>
-        <button class="action-btn clear-btn" id="clearBtn" onclick="clearSelection()" disabled>Clear Colors</button>
+        <button class="action-btn clear-btn" id="clearBtn" onclick="clearSelection()" disabled>Clear</button>
+    </div>
+
+    <div class="leaderboard">
+        <h3>🌍 Global Top 5 Saviors 🌍</h3>
+        <table>
+            <thead><tr><th>Rank</th><th>Name</th><th>Score</th></tr></thead>
+            <tbody id="leaderboardBody">
+                <tr><td colspan='3'>Loading database... 📡</td></tr>
+            </tbody>
+        </table>
     </div>
 
     <script>
-        // Updated colors with Gold and Silver
+        // 🚨🚨🚨 APNA FIREBASE CONFIG YAHAN PASTE KARNA HAI 🚨🚨🚨
+       // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDNyJgsL96qRBcrNjMfnjpNqCoNCqKFh3s",
+  authDomain: "circuit-savior-pro.firebaseapp.com",
+  projectId: "circuit-savior-pro",
+  storageBucket: "circuit-savior-pro.firebasestorage.app",
+  messagingSenderId: "387607383070",
+  appId: "1:387607383070:web:f67334cd3866d6ab7bf20f"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);"
+        };
+        // 🚨🚨🚨 YAHAN TAK 🚨🚨🚨
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        // Game Logic (Same as before)
         const COLORS = {
             "Black": {val: 0, mult: 1, bg: "#000000", fg: "white"},
             "Brown": {val: 1, mult: 10, bg: "#8B4513", fg: "white", tol: 1},
@@ -89,11 +133,10 @@
         let targetRequiredTol = 0;
         let selectedColors = [];
         let score = 0;
-        let timeLeft = 45; // Increased time for calculations
+        let timeLeft = 45; 
         let timerInterval;
         let isPlaying = false;
 
-        // Initialize Palette
         const palette = document.getElementById('palette');
         for (let color in COLORS) {
             let btn = document.createElement('button');
@@ -111,33 +154,26 @@
             document.getElementById('score').innerText = score;
             document.getElementById('startBtn').disabled = true;
             document.getElementById('clearBtn').disabled = false;
-            
-            let btns = document.querySelectorAll('.color-btn');
-            btns.forEach(btn => btn.disabled = false);
-            
+            document.querySelectorAll('.color-btn').forEach(btn => btn.disabled = false);
             nextRound();
         }
 
         function nextRound() {
             isPlaying = true;
-            timeLeft = 45; // 45 seconds to do math and pick colors
+            timeLeft = 45; 
             document.getElementById('timer').innerText = timeLeft;
             document.body.style.backgroundColor = "#1E272E"; 
-            document.getElementById('status').innerText = "Select 4 Colors (D1, D2, Mult, Tol)";
+            document.getElementById('status').innerText = "Select 4 Colors!";
             document.getElementById('status').style.color = "#3498DB";
             
-            // Logic for Scenario Math
-            let d1 = Math.floor(Math.random() * 9) + 1; // 1-9
-            let d2 = Math.floor(Math.random() * 10);    // 0-9
+            let d1 = Math.floor(Math.random() * 9) + 1; 
+            let d2 = Math.floor(Math.random() * 10);    
             let multipliers = [1, 10, 100, 1000, 10000];
             let mult = multipliers[Math.floor(Math.random() * multipliers.length)];
             
             targetRequiredRes = (d1 * 10 + d2) * mult;
-            
-            let existingRes = Math.floor(Math.random() * 20 + 1) * 50; // Random resistance like 50, 100, 450
+            let existingRes = Math.floor(Math.random() * 20 + 1) * 50; 
             let targetTotal = existingRes + targetRequiredRes;
-            
-            // Tolerance (Only 5% or 10% for simplicity)
             let tolerances = [5, 10]; 
             targetRequiredTol = tolerances[Math.floor(Math.random() * tolerances.length)];
 
@@ -146,7 +182,6 @@
             document.getElementById('targetTol').innerText = `±${targetRequiredTol}%`;
             
             clearSelection();
-            
             clearInterval(timerInterval);
             timerInterval = setInterval(updateTimer, 1000);
         }
@@ -155,10 +190,7 @@
             if (!isPlaying) return;
             timeLeft--;
             document.getElementById('timer').innerText = timeLeft;
-            
-            if (timeLeft <= 0) {
-                gameOver("Time's Up! Component Burnt! 🔥");
-            }
+            if (timeLeft <= 0) gameOver("Time's Up! Component Burnt! 🔥");
         }
 
         function addColor(color) {
@@ -166,10 +198,7 @@
             if (selectedColors.length < 4) {
                 selectedColors.push(color);
                 updateResistorDisplay();
-                
-                if (selectedColors.length === 4) {
-                    checkAnswer();
-                }
+                if (selectedColors.length === 4) checkAnswer();
             }
         }
 
@@ -203,7 +232,6 @@
 
             let c1 = selectedColors[0], c2 = selectedColors[1], c3 = selectedColors[2], c4 = selectedColors[3];
             
-            // Validation: First two bands cannot be Gold or Silver (they have no 'val')
             if (COLORS[c1].val === undefined || COLORS[c2].val === undefined) {
                 gameOver("Wrong! Band 1 & 2 cannot be Gold/Silver 💥");
                 return;
@@ -214,15 +242,14 @@
             let userResistance = (val1 * 10 + val2) * mult;
 
             if (userResistance === targetRequiredRes && userTol === targetRequiredTol) {
-                score += 20; // 20 points for hard math!
+                score += 20; 
                 document.getElementById('score').innerText = score;
                 document.getElementById('status').innerText = "Brilliant! Circuit Stabilized! ⚡";
                 document.getElementById('status').style.color = "white";
-                document.body.style.backgroundColor = "#27AE60"; // Green flash
+                document.body.style.backgroundColor = "#27AE60"; 
                 setTimeout(nextRound, 2000);
             } else {
-                let msg = `Wrong! You made ${userResistance}Ω ±${userTol || "?"}%. Needed ${targetRequiredRes}Ω ±${targetRequiredTol}% 💥`;
-                gameOver(msg);
+                gameOver(`Wrong! Needed ${targetRequiredRes}Ω ±${targetRequiredTol}% 💥`);
             }
         }
 
@@ -231,15 +258,62 @@
             clearInterval(timerInterval);
             document.getElementById('status').innerText = message;
             document.getElementById('status').style.color = "white";
-            document.body.style.backgroundColor = "#C0392B"; // Red flash
+            document.body.style.backgroundColor = "#C0392B"; 
             
             document.getElementById('startBtn').disabled = false;
             document.getElementById('startBtn').innerText = "Play Again";
             document.getElementById('clearBtn').disabled = true;
-            
-            let btns = document.querySelectorAll('.color-btn');
-            btns.forEach(btn => btn.disabled = true);
+            document.querySelectorAll('.color-btn').forEach(btn => btn.disabled = true);
+
+            // SAVE TO FIREBASE
+            setTimeout(() => {
+                if(score > 0) {
+                    let playerName = prompt(`Game Over! Score: ${score}. Enter name for GLOBAL Leaderboard:`);
+                    if(playerName) {
+                        saveGlobalScore(playerName, score);
+                    }
+                }
+            }, 500);
         }
+
+        // --- NEW REAL-TIME FIREBASE LEADERBOARD LOGIC ---
+        
+        function saveGlobalScore(name, newScore) {
+            // Firestore mein naya document add kar rahe hain
+            db.collection("global_scores").add({
+                name: name,
+                score: newScore,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                console.log("Score globally saved!");
+            }).catch((error) => {
+                console.error("Error saving score: ", error);
+            });
+        }
+
+        // Ye function apne aap chalega jab bhi koi naya score banayega (Magic!)
+        db.collection("global_scores")
+          .orderBy("score", "desc")
+          .limit(5)
+          .onSnapshot((querySnapshot) => {
+            let tbody = document.getElementById("leaderboardBody");
+            tbody.innerHTML = ""; // Clear purana data
+            
+            if (querySnapshot.empty) {
+                tbody.innerHTML = "<tr><td colspan='3'>No scores yet! Be the first!</td></tr>";
+                return;
+            }
+
+            let rank = 1;
+            querySnapshot.forEach((doc) => {
+                let data = doc.data();
+                let tr = document.createElement("tr");
+                if(rank === 1) tr.className = "rank-1"; // Rank 1 ko highlight karenge
+                tr.innerHTML = `<td>#${rank}</td><td>${data.name}</td><td>${data.score}</td>`;
+                tbody.appendChild(tr);
+                rank++;
+            });
+        });
     </script>
 </body>
 </html>
