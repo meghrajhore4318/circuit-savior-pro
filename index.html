@@ -86,26 +86,15 @@
     </div>
 
     <script>
-        // 🚨🚨🚨 APNA FIREBASE CONFIG YAHAN PASTE KARNA HAI 🚨🚨🚨
-       // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDNyJgsL96qRBcrNjMfnjpNqCoNCqKFh3s",
-  authDomain: "circuit-savior-pro.firebaseapp.com",
-  projectId: "circuit-savior-pro",
-  storageBucket: "circuit-savior-pro.firebasestorage.app",
-  messagingSenderId: "387607383070",
-  appId: "1:387607383070:web:f67334cd3866d6ab7bf20f"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);"
+        // FIREBASE CONFIG - FIXED
+        const firebaseConfig = {
+            apiKey: "AIzaSyDNyJgsL96qRBcrNjMfnjpNqCoNCqKFh3s",
+            authDomain: "circuit-savior-pro.firebaseapp.com",
+            projectId: "circuit-savior-pro",
+            storageBucket: "circuit-savior-pro.firebasestorage.app",
+            messagingSenderId: "387607383070",
+            appId: "1:387607383070:web:f67334cd3866d6ab7bf20f"
         };
-        // 🚨🚨🚨 YAHAN TAK 🚨🚨🚨
 
         // Initialize Firebase
         if (!firebase.apps.length) {
@@ -113,7 +102,7 @@ const app = initializeApp(firebaseConfig);"
         }
         const db = firebase.firestore();
 
-        // Game Logic (Same as before)
+        // Game Logic
         const COLORS = {
             "Black": {val: 0, mult: 1, bg: "#000000", fg: "white"},
             "Brown": {val: 1, mult: 10, bg: "#8B4513", fg: "white", tol: 1},
@@ -276,10 +265,9 @@ const app = initializeApp(firebaseConfig);"
             }, 500);
         }
 
-        // --- NEW REAL-TIME FIREBASE LEADERBOARD LOGIC ---
+        // REAL-TIME FIREBASE LEADERBOARD LOGIC
         
         function saveGlobalScore(name, newScore) {
-            // Firestore mein naya document add kar rahe hain
             db.collection("global_scores").add({
                 name: name,
                 score: newScore,
@@ -291,13 +279,12 @@ const app = initializeApp(firebaseConfig);"
             });
         }
 
-        // Ye function apne aap chalega jab bhi koi naya score banayega (Magic!)
         db.collection("global_scores")
           .orderBy("score", "desc")
           .limit(5)
           .onSnapshot((querySnapshot) => {
             let tbody = document.getElementById("leaderboardBody");
-            tbody.innerHTML = ""; // Clear purana data
+            tbody.innerHTML = ""; 
             
             if (querySnapshot.empty) {
                 tbody.innerHTML = "<tr><td colspan='3'>No scores yet! Be the first!</td></tr>";
@@ -308,11 +295,14 @@ const app = initializeApp(firebaseConfig);"
             querySnapshot.forEach((doc) => {
                 let data = doc.data();
                 let tr = document.createElement("tr");
-                if(rank === 1) tr.className = "rank-1"; // Rank 1 ko highlight karenge
+                if(rank === 1) tr.className = "rank-1";
                 tr.innerHTML = `<td>#${rank}</td><td>${data.name}</td><td>${data.score}</td>`;
                 tbody.appendChild(tr);
                 rank++;
             });
+        }, (error) => {
+            console.error("Leaderboard Error:", error);
+            document.getElementById("leaderboardBody").innerHTML = "<tr><td colspan='3'>Error loading leaderboard! Check console.</td></tr>";
         });
     </script>
 </body>
